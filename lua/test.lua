@@ -1,54 +1,122 @@
-require "table"
-require "posixfs"
+local io = require("io")
+local fstree = require("fstree")
+local test = require("u-test")
+local fs = require("posixfs")
 
-fs = posixfs
+test.insert.middle = function()
+    local a = {[1] = "a", [2] = "b", [3] = "c", [4] = "d"}
+    local b = {[1] = "x", [2] = "y"}
+    fstree.insert(a, b, 3)
 
-function fmtdir(entry)
-  return string.format("%s %s", "D", entry.name)
+    test.equal(a[1], "a")
+    test.equal(a[2], "b")
+    test.equal(a[3], "c")
+    test.equal(a[4], "x")
+    test.equal(a[5], "y")
+    test.equal(a[6], "d")
 end
 
-function fmtfile(entry)
-  return string.format("%s", entry.name)
+test.insert.atend = function()
+    local a = {[1] = "a", [2] = "b", [3] = "c", [4] = "d"}
+    local b = {[1] = "x", [2] = "y"}
+    fstree.insert(a, b, 4)
+
+    test.equal(a[1], "a")
+    test.equal(a[2], "b")
+    test.equal(a[3], "c")
+    test.equal(a[4], "d")
+    test.equal(a[5], "x")
+    test.equal(a[6], "y")
 end
 
-function fmtlink(entry)
-  return string.format("%s", entry.name)
+test.insert.atbegin = function()
+    local a = {[1] = "a", [2] = "b", [3] = "c", [4] = "d"}
+    local b = {[1] = "x", [2] = "y"}
+    fstree.insert(a, b, 1)
+
+    test.equal(a[1], "a")
+    test.equal(a[2], "x")
+    test.equal(a[3], "y")
+    test.equal(a[4], "b")
+    test.equal(a[5], "c")
+    test.equal(a[6], "d")
 end
 
-fmt = {
-  [fs.FSITEM_DIR] = fmtdir,
-  [fs.FSITEM_FILE] = fmtfile,
-  [fs.FSITEM_LINK] = fmtlink,
-}
+test.insert.empty = function()
+    local a = {[1] = "a", [2] = "b", [3] = "c", [4] = "d"}
+    local b = {}
+    fstree.insert(a, b, 1)
 
-lines = {}
-for entry in fs.scan("/Users/vova") do
-  -- print(string.format("%s %s", line.type, line.name))
-  -- print(fmt[entry.type](entry))
-  -- lines[#lines + 1] = fmt[entry.type](entry)
-  lines[#lines + 1] = entry
+    test.equal(a[1], "a")
+    test.equal(a[2], "b")
+    test.equal(a[3], "c")
+    test.equal(a[4], "d")
 end
 
-local function order(a, b)
-  if a.type == fs.FSITEM_DIR then
-    if b.type == fs.FSITEM_DIR then
-      return a.name < b.name
-    else
-      return true
-    end
-  else
-    if b.type == fs.FSITEM_DIR then
-      return false
-    else
-      return a.name < b.name
-    end
-  end
+test.join_level = function()
+    test.equal(fstree.join_level("/some/path", "tail"), "/some/path/tail")
+    test.equal(fstree.join_level("/some/path/", "tail"), "/some/path/tail")
 end
 
-table.sort(lines, order)
-
-for k, v in pairs(lines) do
-  print(fmt[v.type](v))
+test.trim_level = function()
+    test.equal(fstree.trim_level("/some/path/tail"), "/some/path")
+    test.equal(fstree.trim_level("/some/path/tail/"), "/some/path")
+    test.equal(fstree.trim_level("/some"), "/")
 end
 
+local prefix = "/tmp/test/fstree"
 
+local function setup()
+    io.popen(string.format("mkdir -p %s/subdir-1", prefix)):close()
+    io.popen(string.format("mkdir -p %s/subdir-2", prefix)):close()
+    io.popen(string.format("mkdir -p %s/subdir-3", prefix)):close()
+    io.popen(string.format("mkdir -p %s/subdir-1/subdir-1-1", prefix)):close()
+    io.popen(string.format("mkdir -p %s/subdir-1/subdir-1-2", prefix)):close()
+    io.popen(string.format("mkdir -p %s/subdir-3/subdir-3-1", prefix)):close()
+    io.popen(string.format("echo file-1 > %s/afile-1", prefix)):close()
+    io.popen(string.format("echo file-2 > %s/bfile-2", prefix)):close()
+    io.popen(string.format("echo file-1-1 > %s/subdir-1/afile-1-1", prefix)):close()
+    io.popen(string.format("echo file-1-2 > %s/subdir-1/afile-1-2", prefix)):close()
+    io.popen(string.format("echo file-1-1-1 > %s/subdir-1/subdir-1-1/afile-1-1-1", prefix)):close()
+    io.popen(string.format("echo file-1-1-2 > %s/subdir-1/subdir-1-1/afile-1-1-2", prefix)):close()
+    io.popen(string.format("echo file-1-1-3 > %s/subdir-1/subdir-1-1/afile-1-1-3", prefix)):close()
+    io.popen(string.format("echo file-1-2-1 > %s/subdir-1/subdir-1-2/afile-1-2-1", prefix)):close()
+    io.popen(string.format("echo file-1-2-2 > %s/subdir-1/subdir-1-2/afile-1-2-2", prefix)):close()
+    io.popen(string.format("echo file-2-1 > %s/subdir-2/zfile-2-1", prefix)):close()
+    io.popen(string.format("echo file-2-2 > %s/subdir-2/zfile-2-2", prefix)):close()
+    io.popen(string.format("echo file-2-3 > %s/subdir-2/bfile-2-3", prefix)):close()
+end
+
+local function teardown()
+    io.popen(string.format("rm -rf %s", prefix))
+end
+
+test.start_up = setup
+test.tear_down = teardown
+
+test.scan = function()
+    local filter = fstree.filter({"^%.$", "^%..$"})
+    local expand = {"subdir-1", "subdir-3", "subdir-1-1", "subdir-1-2"}
+    local entries = fstree.scan(prefix, expand, filter, 0)
+
+    -- for k, v in pairs(entries) do
+    --     print(k, string.rep(' ', v.level * 4) .. v.name)
+    -- end
+
+    test.equal(entries[1].name, "subdir-1")
+    test.equal(entries[2].name, "subdir-1-1")
+    test.equal(entries[3].name, "afile-1-1-1")
+    test.equal(entries[4].name, "afile-1-1-2")
+    test.equal(entries[5].name, "afile-1-1-3")
+    test.equal(entries[6].name, "subdir-1-2")
+    test.equal(entries[7].name, "afile-1-2-1")
+    test.equal(entries[8].name, "afile-1-2-2")
+    test.equal(entries[9].name, "afile-1-1")
+    test.equal(entries[10].name, "afile-1-2")
+    test.equal(entries[11].name, "subdir-2")
+    test.equal(entries[12].name, "subdir-3")
+    test.equal(entries[14].name, "afile-1")
+    test.equal(entries[15].name, "bfile-2")
+end
+
+test.summary()
