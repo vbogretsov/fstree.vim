@@ -1,6 +1,10 @@
 require("posixfs")
 local fs = posixfs
 
+-- ============================================================================
+-- TODO: move path delimiter to constant
+-- TODO: use Type.new instead of Type:new
+
 local VAR_INDENT_SIZE = "fstree_indent_size"
 local VAR_CHAR_DIRCLOS = "fstree_char_dirclos"
 local VAR_CHAR_DIROPEN = "fstree_char_diropen"
@@ -39,60 +43,6 @@ function formatter(api, expanded)
         return lines
     end
 end
-
--- local function getview()
---   return vim.api.nvim_get_var('fstree_view')
--- end
-
--- local function setview(view)
---   vim.api.nvim_set_var('fstree_view', view)
--- end
-
--- function opendir(bufnr, view)
---   -- TODO: set relative path
---   vim.api.nvim_buf_set_lines(bufnr, 0, #view.items, false, {})
-
---   view.items = {}
---   view.lines = {}
-
---   vim.api.nvim_buf_set_name(bufnr, view.path)
---   for k, v in pairs(scan(view.path, view.level)) do
---     view.items[#view.items + 1] = v
---     view.lines[#view.lines + 1] = indent(FMT[v.type](v), v.level)
---   end
---   vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, view.lines)
-
---   setview(view)
--- end
-
--- function open(bufnr, cwd)
---   local view = {
---     level = 0,
---     items = {},
---     lines = {},
---     expan = {},
---     path = cwd,
---   }
---   opendir(bufnr, view)
--- end
-
--- function next(bufnr, linenr)
---   local view = getview()
---   local item = view.items[linenr]
-
---   -- vim.api.nvim_command(string.format('echo "%s"', item.name))
-
---   if item.type == fs.FSITEM_DIR then
---     view.path = joinpath(view.path, item.name)
---     opendir(bufnr, view)
---   else
---     -- open file
---   end
--- end
-
--- ============================================================================
--- TODO: move path delimiter to constant
--- TODO: use Type.new instead of Type:new
 
 local function tableid(tab)
     id, _ = string.gsub(tostring(tab), "table: ", "")
@@ -197,7 +147,6 @@ end
 
 function Tree:append(entry)
     self.entries[#self.entries + 1] = entry
-    -- self.revers[entry.name] = #self.entries
     self.revers[entry.id] = #self.entries
 end
 
@@ -209,7 +158,7 @@ end
 function Tree:parent(entry)
     local position = self.revers[entry.id]
     for i = position, 1, -1 do
-        local e = self.tree[i]
+        local e = self.entries[i]
         if e.level < entry.level and e.type == fs.FSITEM_DIR then
             return e
         end
@@ -220,13 +169,17 @@ end
 function Tree:path(entry)
     local parents = {entry}
 
-    while parents[#parents] do
-        parents[#parents + 1] = self:parent(parents[#parents])
+    while true do
+        local parent = self:parent(parents[#parents])
+        if parent == nil then
+            break
+        end
+        parents[#parents + 1] = parent
     end
 
     local path = ''
-    for i = #parents - 1, 1, -1 do
-        path = join_level(path, #parents[i])
+    for i = #parents, 1, -1 do
+        path = join_level(path, parents[i].name)
     end
 
     local path, _ = string.gsub(path, "^/", "")
@@ -270,6 +223,7 @@ end
 function Model.load(api)
     local this = api.nvim_get_var("fstree__model")
     setmetatable(this, Model)
+    setmetatable(this.tree, Tree)
     return this
 end
 
@@ -298,10 +252,11 @@ function Model:expand(linenr)
         return
     end
 
-    local subdir = join_level(cwd, self.tree:path(entry))
-    local subtree = scan(subdir, self.expaned, self.filter, entry.level)
+    local subdir = join_level(self.cwd, self.tree:path(entry))
+    local filter = filter(self.patterns)
+    local subtree = scan(subdir, self.expanded, filter, entry.level + 1)
 
-    self.tree:insert(position, subtree)
+    self.tree:insert(linenr, subtree)
     self.expanded[entry.id] = true
 
     return subtree.entries
@@ -322,6 +277,7 @@ function Controller.new(api, cwd, model)
     local this = {}
     setmetatable(this, Controller)
 
+    this.line = 1
     this.cwd = cwd
     this.api = api
     this.model = model
@@ -358,19 +314,33 @@ function Controller:opendir(path)
     local lines = self.formatter(self.model.tree.entries)
     self.api.nvim_buf_set_lines(buf, 0, #lines, false, lines)
     local bufname = string.gsub(self.model.cwd, self.cwd .. "/?", "")
-    self.api.nvim_buf_set_name(buf, bufname)
+
+    if bufname == "" then
+        self.api.nvim_buf_set_name(buf, ".")
+    else
+        self.api.nvim_buf_set_name(buf, bufname)
+    end
 end
 
 function Controller:openfile(entry)
     error("not implemented")
 end
 
-function Controller:expand(linenr)
-    error("not implemented")
+function Controller:expand()
+    local linenr = self.api.nvim_eval("line('.')")
+    local entries = self.model:expand(linenr)
+    local lines = self.formatter(entries)
+
+    -- TODO: replace parent folder sign
+    self.api.nvim_buf_set_lines(buf, linenr, linenr, false, lines)
 end
 
-function Controller:collapse(linenr)
-    error("not implemented")
+function Controller:collapse()
+    local linenr = self.api.nvim_eval("line('.')")
+    local from, to = self.model:collapse(linenr)
+
+    -- TODO: replace parent folder sign
+    self.api.nvim_buf_set_lines(buf, from, to, false, {})
 end
 
 function Controller:locate(file)
@@ -416,6 +386,24 @@ local function back()
     save(c.cwd, c.model)
 end
 
+local function expand()
+    local c = load()
+    c:expand()
+    save(c.cwd, c.model)
+end
+
+local function collapse()
+    local c = load()
+    c:collapse()
+    save(c.cwd, c.model)
+end
+
+local function collapse()
+    local c = load()
+    c:locate()
+    save(c.cwd, c.model)
+end
+
 return {
     scan = scan,
     filter = filter,
@@ -426,8 +414,11 @@ return {
     Model = Model,
     Controller = Controller,
 
+    init = init,
     open = open,
     next = next,
     back = back,
-    init = init,
+    expand = expand,
+    collapse = collapse,
+    locate = locate
 }
