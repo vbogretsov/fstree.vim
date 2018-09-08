@@ -263,20 +263,31 @@ end
 Model = {}
 Model.__index = Model
 
-function Model.new(cwd, filters)
+function Model.save(api, model)
+    api.nvim_set_var("fstree__model", model)
+end
+
+function Model.load(api)
+    local this = api.nvim_get_var("fstree__model")
+    setmetatable(this, Model)
+    return this
+end
+
+function Model.new(cwd, patterns)
     local this = {}
     setmetatable(this, Model)
 
     this.cwd = cwd
+    this.tree = {entries = {}, revers = {}}
     this.expanded = {}
-    this.filter = filter(filters)
+    this.patterns = patterns
 
     return this
 end
 
 function Model:open(dir)
     local dir = join_level(self.cwd, dir)
-    self.tree = scan(dir, self.expanded, self.filter, 0)
+    self.tree = scan(dir, self.expanded, filter(self.patterns), 0)
     self.cwd = dir
 end
 
@@ -307,31 +318,30 @@ end
 Controller = {}
 Controller.__index = Controller
 
-function Controller.new(api, cwd)
+function Controller.new(api, cwd, model)
     local this = {}
     setmetatable(this, Controller)
 
     this.cwd = cwd
     this.api = api
-    this.model = Model.new(cwd, api.nvim_get_var("fstree_exclude"))
-    this.formatter = formatter(api, this.model.expanded)
+    this.model = model
+    this.formatter = formatter(api, model.expanded)
 
     return this
 end
 
-function Controller:open(linenr)
-    if linenr == 0 then
-        self:opendir("")
+function Controller:open()
+    self:opendir("")
+end
+
+function Controller:next()
+    local linenr = self.api.nvim_eval("line('.')")
+    local entry = self.model.tree.entries[linenr]
+
+    if entry.type == fs.FSITEM_DIR then
+        self:opendir(entry.name)
     else
-        local entry = self.model.tree.entries[linenr]
-        if entry == nil then
-            error(string.format("no entry at line %d", linenr))
-        end
-        if entry.type == fs.FSITEM_DIR then
-            self:opendir(entry.name)
-        else
-            self:openfile(entry.name)
-        end
+        self:openfile(entry.name)
     end
 end
 
@@ -341,10 +351,12 @@ end
 
 function Controller:opendir(path)
     local buf = self.api.nvim_get_current_buf()
-    self.api.nvim_buf_set_lines(buf, 0, 0, true, {})
+    self.api.nvim_buf_set_lines(buf, 0, #self.model.tree.entries, false, {})
+
     self.model:open(path)
+
     local lines = self.formatter(self.model.tree.entries)
-    self.api.nvim_buf_set_lines(buf, 0, #lines, true, lines)
+    self.api.nvim_buf_set_lines(buf, 0, #lines, false, lines)
     local bufname = string.gsub(self.model.cwd, self.cwd .. "/?", "")
     self.api.nvim_buf_set_name(buf, bufname)
 end
@@ -365,12 +377,57 @@ function Controller:locate(file)
     error("not implemented")
 end
 
+local function load()
+    local cwd = vim.api.nvim_get_var('fstree__cwd')
+    local model = Model.load(vim.api)
+    return Controller.new(vim.api, cwd, model)
+end
+
+local function save(cwd, model)
+    vim.api.nvim_set_var('fstree__cwd', cwd)
+    Model.save(vim.api, model)
+end
+
+local function init()
+    local cwd = vim.api.nvim_eval("getcwd()")
+    local exclude = vim.api.nvim_get_var("fstree_exclude")
+    local model = Model.new(cwd, exclude)
+
+    save(cwd, model)
+
+    vim.api.nvim_set_var("fstree_controller", 1)
+end
+
+local function open()
+    local c = load()
+    c:open()
+    save(c.cwd, c.model)
+end
+
+local function next()
+    local c = load()
+    c:next()
+    save(c.cwd, c.model)
+end
+
+local function back()
+    local c = load()
+    c:back()
+    save(c.cwd, c.model)
+end
+
 return {
     scan = scan,
     filter = filter,
     insert = insert,
     join_level =  join_level,
     trim_level = trim_level,
+
     Model = Model,
     Controller = Controller,
+
+    open = open,
+    next = next,
+    back = back,
+    init = init,
 }
