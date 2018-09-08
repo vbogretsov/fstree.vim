@@ -97,26 +97,26 @@ test.tear_down = teardown
 test.scan = function()
     local filter = fstree.filter({"^%.$", "^%..$"})
     local expand = {"subdir-1", "subdir-3", "subdir-1-1", "subdir-1-2"}
-    local entries = fstree.scan(prefix, expand, filter, 0)
+    local tree = fstree.scan(prefix, expand, filter, 0)
 
     -- for k, v in pairs(entries) do
     --     print(k, string.rep(' ', v.level * 4) .. v.name)
     -- end
 
-    test.equal(entries[1].name, "subdir-1")
-    test.equal(entries[2].name, "subdir-1-1")
-    test.equal(entries[3].name, "afile-1-1-1")
-    test.equal(entries[4].name, "afile-1-1-2")
-    test.equal(entries[5].name, "afile-1-1-3")
-    test.equal(entries[6].name, "subdir-1-2")
-    test.equal(entries[7].name, "afile-1-2-1")
-    test.equal(entries[8].name, "afile-1-2-2")
-    test.equal(entries[9].name, "afile-1-1")
-    test.equal(entries[10].name, "afile-1-2")
-    test.equal(entries[11].name, "subdir-2")
-    test.equal(entries[12].name, "subdir-3")
-    test.equal(entries[14].name, "afile-1")
-    test.equal(entries[15].name, "bfile-2")
+    test.equal(tree.entries[1].name, "subdir-1")
+    test.equal(tree.entries[2].name, "subdir-1-1")
+    test.equal(tree.entries[3].name, "afile-1-1-1")
+    test.equal(tree.entries[4].name, "afile-1-1-2")
+    test.equal(tree.entries[5].name, "afile-1-1-3")
+    test.equal(tree.entries[6].name, "subdir-1-2")
+    test.equal(tree.entries[7].name, "afile-1-2-1")
+    test.equal(tree.entries[8].name, "afile-1-2-2")
+    test.equal(tree.entries[9].name, "afile-1-1")
+    test.equal(tree.entries[10].name, "afile-1-2")
+    test.equal(tree.entries[11].name, "subdir-2")
+    test.equal(tree.entries[12].name, "subdir-3")
+    test.equal(tree.entries[14].name, "afile-1")
+    test.equal(tree.entries[15].name, "bfile-2")
 end
 
 test.summary()

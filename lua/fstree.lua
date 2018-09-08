@@ -211,61 +211,86 @@ local function filter(patterns)
     end
 end
 
-local function shift(entries, reverse, position, size)
+-- directories and expanded subdirectories list
+Tree = {}
+Tree.__index = Tree
+
+function Tree:new()
+    local this = {}
+    setmetatable(this, Tree)
+    this.entries = {}
+    this.revers = {}
+    return this
+end
+
+function Tree:shift(position, size)
     for i = position, position + size do
-        local e = entries[i]
+        local e = self.entries[i]
         if e then
-            reverse[e.name] = reverse[e.name] + size
+            self.revers[e.name] = self.revers[e.name] + size
         end
     end
 end
 
+function Tree:sort(order)
+    table.sort(self.entries, order)
+
+    self.revers = {}
+    for k, v in pairs(self.entries) do
+        self.revers[v.name] = k
+    end
+end
+
+function Tree:append(entry)
+    self.entries[#self.entries + 1] = entry
+    self.revers[entry.name] = #self.entries
+end
+
+function Tree:insert(position, subtree)
+    self:shift(position, #subtree.entries)
+    insert(self.entries, subtree.entries, position)
+end
+
 -- get ordered array of items in the directory, skip item which names match the
 -- exclude pattern
-local function scan(dir, expand, filter, level)
-    local entries = {}
+local function scan(dir, expan, filter, level)
+    local tree = Tree:new()
 
     for e in fs.scan(dir) do
         if not filter(e.name) then
             e.level = level
-            entries[#entries + 1] = e
+            tree:append(e)
         end
     end
 
-    table.sort(entries, order)
+    tree:sort(order)
 
-    local reverse = {}
-    for k, v in pairs(entries) do
-        reverse[v.name] = k
-    end
-
-    for k, v in pairs(expand) do
-        local position = reverse[v]
+    for k, v in pairs(expan) do
+        local position = tree.revers[v]
         if position then
-            local subset = scan(join_level(dir, v), expand, filter, level + 1)
-            shift(entries, reverse, position, #subset)
-            insert(entries, subset, position)
+            local subtree = scan(join_level(dir, v), expan, filter, level + 1)
+            tree:insert(position, subtree)
         end
     end
 
-    return entries
+    return tree
 end
 
 Model = {}
 Model.__index = {}
 
-function Model:new(cwd)
+function Model:new(cwd, patterns)
     local m = {}
     setmetatable(m, Model)
     m.cwd = cwd
     m.items = {}
     m.expan = {}
-    m.level = {}
+    m.revers = {}
+    m.filter = filter(patterns)
     return m
 end
 
-function Model:open(dir)
-
+function Model:open(dir, level)
 end
 
 function Model:expand(dir)

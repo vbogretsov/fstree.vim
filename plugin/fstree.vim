@@ -12,8 +12,16 @@ function! s:open()
     call luaeval(printf('require("fstree").open(%d, "%s")', bufnr, cwd))
 endfunction
 
+function! s:next()
+    let bufnr = bufnr('%')
+    let linenr = line('.')
+
+    call luaeval(printf('require("fstree").next(%d, %d)', bufnr, linenr))
+endfunction
+
 function! s:locate()
 endfunction
 
 command TreeOpen :call s:open()
+command TreeNext :call s:next()
 command TreeLocate :call s:locate()
