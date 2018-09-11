@@ -5,8 +5,12 @@ LDFLAGS			= -L$(ROOT)/lib -shared -fpic
 SRC 			= $(wildcard ./*.c)
 OBJ				= $(SRC:.c=.o)
 MODULE			= $(NAME).so
+LUA				= luajit
 
 default: $(MODULE)
+
+test: $(MODULE)
+	$(LUA) test.lua
 
 $(MODULE): $(OBJ)
 	@printf "    %s\n" linking...

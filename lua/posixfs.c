@@ -1,10 +1,15 @@
 #include <errno.h>
-#include <dirent.h>
-#include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
+#include <dirent.h>
 
 #include <luajit-2.0/lua.h>
 #include <luajit-2.0/lauxlib.h>
+
+static const char SEPARATOR = '/';
+static const char* ROOT = "/";
 
 enum fsitem {
     FSITEM_UNKNOWN,
@@ -65,6 +70,82 @@ static int scan(lua_State* L) {
     return 1;
 }
 
+static int _trim(lua_State* L, const char* base) {
+    size_t len = strlen(base);
+
+    if (strcmp(base, ROOT) == 0) {
+        lua_pushstring(L, ROOT);
+        return 1;
+    }
+
+    char const* p = base + len - 1;
+    if (*p == SEPARATOR) {
+        --p;
+    }
+
+    while (p != base && *p != SEPARATOR) {
+        --p;
+    }
+
+    if (p == base) {
+        lua_pushstring(L, ROOT);
+        return 1;
+    }
+
+    char* path = (char*)malloc((p - base) * sizeof(char));
+    strncpy(path, base, p - base);
+
+    lua_pushstring(L, path);
+    free(path);
+
+    return 1;
+}
+
+static int _join(lua_State* L, const char* base, const char* tail) {
+    size_t base_len = strlen(base);
+    size_t tail_len = strlen(tail);
+
+    char* path = (char*)malloc((base_len + tail_len + 1) + sizeof(char));
+    strcpy(path, base);
+
+    char* p = path + base_len - 1;
+    if (*p != SEPARATOR) {
+        *(++p) = SEPARATOR;
+    }
+
+    ++p;
+
+    strcpy(p, tail);
+
+    p = p + tail_len - 1;
+    if (*p == SEPARATOR) {
+        *p = '\0';
+    }
+
+    lua_pushstring(L, path);
+    free(path);
+
+    return 1;
+}
+
+static int path_join(lua_State* L) {
+    const char* base = luaL_checkstring(L, 1);
+    if (*base != SEPARATOR) {
+        return luaL_error(L, "expected absolute path as first argument");
+    }
+
+    const char* tail = luaL_checkstring(L, 2);
+    if (*tail == SEPARATOR) {
+        return luaL_error(L, "expected relative path as second argument");
+    }
+
+    if (strcmp(tail, "..") == 0) {
+        return _trim(L, base);
+    }
+
+    return _join(L, base, tail);
+}
+
 int luaopen_posixfs(lua_State* L) {
     luaL_newmetatable(L, "posixfs.scan");
 
@@ -94,7 +175,9 @@ int luaopen_posixfs(lua_State* L) {
     lua_pushnumber(L, FSITEM_LINK);
     lua_settable(L, -3);
 
-    lua_setglobal(L, "posixfs");
+    lua_pushstring(L, "path_join");
+    lua_pushcfunction(L, path_join);
+    lua_settable(L, -3);
 
-    return 0;
+    return 1;
 }
