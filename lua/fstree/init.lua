@@ -1,0 +1,3 @@
+--- fstree: root module imports public functions and tables
+--- the plugin is implemented according to the following interaction scheme:
+--- [nvim] <---> [plugin] <---> [model]
