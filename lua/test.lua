@@ -1,6 +1,7 @@
 local io = require("io")
 local test = require("u-test")
 local fs = require("posixfs")
+
 local model = require("fstree.model")
 
 -- ************************** fixtures ****************************************
@@ -25,7 +26,7 @@ local function start_up()
     echo("file-1", "afile-1")
     echo("file-2", "bfile-2")
     echo("file-1-1", "subdir-1/afile-1-1")
-    echo("file-1-2", "subdir-1/afile-1-s")
+    echo("file-1-2", "subdir-1/afile-1-2")
     echo("file-1-1-1", "subdir-1/subdir-1-1/afile-1-1-1")
     echo("file-1-1-2", "subdir-1/subdir-1-1/afile-1-1-2")
     echo("file-1-1-3", "subdir-1/subdir-1-1/afile-1-1-3")
@@ -80,6 +81,39 @@ end
 
 test.open.start_up = start_up
 test.open.tear_down = tear_down
+
+-- ************************** hashlib *****************************************
+
+-- test.hashlib = function()
+--     local charset = {}
+--     -- qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890
+--     for i = 48,  57 do table.insert(charset, string.char(i)) end
+--     for i = 65,  90 do table.insert(charset, string.char(i)) end
+--     for i = 97, 122 do table.insert(charset, string.char(i)) end
+
+--     math.randomseed(os.time())
+
+--     local function randstr(len)
+--         if len > 0 then
+--             return randstr(len - 1) .. charset[math.random(1, #charset)]
+--         else
+--             return ""
+--         end
+--     end
+
+--     local size = 1000
+--     local buckets = {}
+
+--     for i = 1, size do
+--         local str = randstr(10)
+--         local ind = hashlib.hash(str) % size
+--         buckets[ind] = (buckets[ind] or 0) + 1
+--     end
+
+--     for k, v in pairs(buckets) do
+--         test.is_true(v < 10)
+--     end
+-- end
 
 -- ************************** mock ********************************************
 
@@ -138,12 +172,12 @@ end
 local function setup_tree()
     local a = model.Tree.new()
     for i = 1, 10 do
-        a:append({name = "a" .. i, type = fs.FSITEM_FILE})
+        a:append({name = "a" .. i, type = fs.FSITEM_FILE, path = "a" .. i})
     end
 
     local b = model.Tree.new()
     for i = 1, 5 do
-        b:append({name = "b" .. i, type = fs.FSITEM_DIR})
+        b:append({name = "b" .. i, type = fs.FSITEM_DIR, path = "b" .. i})
     end
 
     return a, b
@@ -174,7 +208,7 @@ test.tree.insert = function()
     test.equal(a.entries[15].name, "a10")
 
     for i = 1, #a.entries do
-        local id, _ = string.gsub(tostring(a.entries[i]), "table: ", "")
+        local id = a.entries[i].path
         test.equal(a.revers[id], i)
     end
 end
@@ -193,7 +227,7 @@ test.tree.remove = function()
     test.equal(a.entries[5].name, "a10")
 
     for i = 1, #a.entries do
-        local id, _ = string.gsub(tostring(a.entries[i]), "table: ", "")
+        local id = a.entries[i].path
         test.equal(a.revers[id], i)
     end
 end
@@ -288,6 +322,62 @@ test.mock.buf_remove_lines = function()
     test.equal(lines[5], "  bfile-2")
 end
 
+test.filter = function()
+    local fn = model.filter({"^%.$", "^%..$"})
+    test.is_true(fn("."))
+    test.is_true(fn(".."))
+    test.is_false(fn("a.b"))
+    test.is_false(fn("a..b"))
+    test.is_false(fn(".ab"))
+    test.is_false(fn("..ab"))
+    test.is_false(fn("ab."))
+    test.is_false(fn("ab.."))
+end
+
+test.scanner.start_up = start_up
+test.scanner.tear_down = tear_down
+
+test.scanner.scan = function()
+    local expanded = {
+        [CWD] = {
+            ["subdir-1"] = true,
+            ["subdir-3"] = true,
+        },
+        [fs.path_join(CWD, "subdir-1")] = {
+            ["subdir-1-1"] = true,
+        }
+    }
+    local scanner = model.scanner(expanded, model.filter({"^%.$", "^%..$"}))
+
+    local tree = scanner(CWD, 0)
+
+    test.equal(tree.entries[1].name, "subdir-1")
+    test.equal(tree.entries[1].level, 0)
+    test.equal(tree.entries[2].name, "subdir-1-1")
+    test.equal(tree.entries[2].level, 1)
+    test.equal(tree.entries[3].name, "afile-1-1-1")
+    test.equal(tree.entries[3].level, 2)
+    test.equal(tree.entries[4].name, "afile-1-1-2")
+    test.equal(tree.entries[4].level, 2)
+    test.equal(tree.entries[5].name, "afile-1-1-3")
+    test.equal(tree.entries[5].level, 2)
+    test.equal(tree.entries[6].name, "subdir-1-2")
+    test.equal(tree.entries[6].level, 1)
+    test.equal(tree.entries[7].name, "afile-1-1")
+    test.equal(tree.entries[7].level, 1)
+    test.equal(tree.entries[8].name, "afile-1-2")
+    test.equal(tree.entries[8].level, 1)
+    test.equal(tree.entries[9].name, "subdir-2")
+    test.equal(tree.entries[9].level, 0)
+    test.equal(tree.entries[10].name, "subdir-3")
+    test.equal(tree.entries[10].level, 0)
+    test.equal(tree.entries[11].name, "subdir-3-1")
+    test.equal(tree.entries[11].level, 1)
+    test.equal(tree.entries[12].name, "afile-1")
+    test.equal(tree.entries[12].level, 0)
+    test.equal(tree.entries[13].name, "bfile-2")
+    test.equal(tree.entries[13].level, 0)
+end
 
 test.open = function()
     -- local plugin = new()

@@ -128,6 +128,7 @@ static int _join(lua_State* L, const char* base, const char* tail) {
     return 1;
 }
 
+// TODO: accept array.
 static int path_join(lua_State* L) {
     const char* base = luaL_checkstring(L, 1);
     if (*base != SEPARATOR) {
@@ -173,6 +174,11 @@ int luaopen_posixfs(lua_State* L) {
 
     lua_pushstring(L, "FSITEM_LINK");
     lua_pushnumber(L, FSITEM_LINK);
+    lua_settable(L, -3);
+
+    // TODO: don't expose separator.
+    lua_pushstring(L, "SEPARATOR");
+    lua_pushstring(L, ROOT);
     lua_settable(L, -3);
 
     lua_pushstring(L, "path_join");

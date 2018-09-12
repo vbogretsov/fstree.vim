@@ -1,21 +1,19 @@
-NAME			= posixfs
 ROOT			= /Users/vova/ports
 CFLAGS			= -I$(ROOT)/include -Wall -Werror -pedantic
 LDFLAGS			= -L$(ROOT)/lib -shared -fpic
 SRC 			= $(wildcard ./*.c)
 OBJ				= $(SRC:.c=.o)
-MODULE			= $(NAME).so
+SO				= $(OBJ:.o=.so)
 LUA				= luajit
 
-default: $(MODULE)
+default: $(SO)
 
-test: $(MODULE)
-	$(LUA) test.lua
+test: $(SO)
+	@$(LUA) test.lua
 
-$(MODULE): $(OBJ)
-	@printf "    %s\n" linking...
-	@$(CC) $(LDFLAGS) -lluajit-5.1.2 -o $@ $(OBJ)
-	@printf "    %s\n" done
+%.so: %.o
+	@printf "    %s\n" "linking $@ ..."
+	@$(CC) $(LDFLAGS) -lluajit-5.1.2 -o $@ $<
 
 %.o: %.c
 	@printf "cc  %s\n" $<

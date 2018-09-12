@@ -1,13 +1,5 @@
 --- model: provides vim and fs agnostic fs tree navigation
-fs = require("posixfs")
-
---- gets unique table ID which is it's memory address
--- @param tab table: table which ID is requested
--- @return string: table address string
-local function uid(tab)
-    id, _ = string.gsub(tostring(tab), "table: ", "")
-    return id
-end
+local fs = require("posixfs")
 
 --- defines sorting order of directory items where directories are always on
 -- top and all items ordered alphabetically
@@ -51,7 +43,7 @@ function Tree:sort(order)
 
     self.revers = {}
     for k, v in pairs(self.entries) do
-        self.revers[v.id] = k
+        self.revers[v.path] = k
     end
 end
 
@@ -59,7 +51,7 @@ end
 -- @param entry table: entry to be added
 function Tree:append(entry)
     self.entries[#self.entries + 1] = entry
-    self.revers[uid(entry)] = #self.entries
+    self.revers[entry.path] = #self.entries
 end
 
 --- inserts new items starting from the position provided
@@ -69,11 +61,11 @@ function Tree:insert(pos, new)
     for k, v in pairs(new.entries) do
         local i = pos + k - 1
         table.insert(self.entries, i, v)
-        self.revers[uid(v)] = i
+        self.revers[v.path] = i
     end
 
     for i = pos + #new, #self.entries do
-        self.revers[uid(self.entries[i])] = i
+        self.revers[self.entries[i].path] = i
     end
 end
 
@@ -83,11 +75,11 @@ end
 function Tree:remove(pos, len)
     for i = 1, len do
         local e = table.remove(self.entries, pos)
-        table.remove(self.revers, uid(e))
+        self.revers[e.path] = nil
     end
 
     for i = pos, #self.entries do
-        local id = uid(self.entries[i])
+        local id = self.entries[i].path
         self.revers[id] = self.revers[id] - len
     end
 end
@@ -105,6 +97,7 @@ function Tree:parent(entry)
     return nil
 end
 
+-- TODO: remove if unnecessary
 --- gets list of parent nodes of the entry provided
 -- @param entry table: the entry which parents are requested
 -- @return array: entry's parents
@@ -136,34 +129,64 @@ local function filter(patterns)
     end
 end
 
+local function scanner(expanded, filter)
+    local scan
+    scan = function(dir, level)
+        local tree = Tree:new()
+
+        for e in fs.scan(dir) do
+            if not filter(e.name) then
+                e.level = level
+                e.path = fs.path_join(dir, e.name)
+                tree:append(e)
+            end
+        end
+
+        tree:sort(order)
+
+        for k, v in pairs(expanded[dir] or {}) do
+            local sub = fs.path_join(dir, k)
+            local pos = tree.revers[sub]
+
+            if pos then
+                local subtree = scan(sub, level + 1)
+                tree:insert(pos + 1, subtree)
+            end
+        end
+
+        return tree
+    end
+    return scan
+end
+
 --- get ordered directory tree
 -- @param dir string: directory path
 -- @param expanded table: cache of entries which should be expanded
 -- @param filter function: filter function
 -- @param level number: directory level
-local function scan(dir, expanded, filter, level)
-    local tree = Tree:new()
+-- local function scan(dir, expanded, filter, level)
+--     local tree = Tree:new()
 
-    for e in fs.scan(dir) do
-        if not filter(e.name) then
-            e.level = level
-            tree:append(e)
-        end
-    end
+--     for e in fs.scan(dir) do
+--         if not filter(e.name) then
+--             e.level = level
+--             tree:append(e)
+--         end
+--     end
 
-    tree:sort(order)
+--     tree:sort(order)
 
-    for k, v in pairs(expanded) do
-        local pos = tree.revers[k]
-        if pos then
-            local subdir = fs.path_join(dir, v.name)
-            local subtree = scan(subdir, expanded, filter, level + 1)
-            tree:insert(pos, subtree)
-        end
-    end
+--     for k, v in pairs(expanded) do
+--         local pos = tree.revers[k]
+--         if pos then
+--             local subdir = fs.path_join(dir, v.name)
+--             local subtree = scan(subdir, expanded, filter, level + 1)
+--             tree:insert(pos, subtree)
+--         end
+--     end
 
-    return tree
-end
+--     return tree
+-- end
 
 --- represents plugin model
 Model = {}
@@ -194,11 +217,13 @@ function Model:expand(entry)
     local subtree = scan(subdir, self.expanded, filter, entry.level + 1)
 
     self.tree:insert(linenr, subtree)
-    self.expanded[uid(entry)] = true
+    self.expanded[entry.path] = true
 
     return subtree.entries
 end
 
 return {
-    Tree = Tree
+    Tree = Tree,
+    filter = filter,
+    scanner = scanner,
 }
