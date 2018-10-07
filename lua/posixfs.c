@@ -128,7 +128,6 @@ static int _join(lua_State* L, const char* base, const char* tail) {
     return 1;
 }
 
-// TODO: accept array.
 static int path_join(lua_State* L) {
     const char* base = luaL_checkstring(L, 1);
     if (*base != SEPARATOR) {

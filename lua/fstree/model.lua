@@ -129,27 +129,33 @@ local function filter(patterns)
     end
 end
 
-local function scanner(expanded, filter)
+--- creates directory scanner with the names filter provided
+-- @param filter (name) => bool: directory entry name filter
+-- @return (dir, expanded, level) => Tree: directories scanner which expands
+-- subdirectories present in expended cache, directory entries are sorted
+-- alphabetically but directories are in top
+local function scanner(filter)
     local scan
-    scan = function(dir, level)
+    scan = function(dir, expanded, level)
         local tree = Tree:new()
 
         for e in fs.scan(dir) do
             if not filter(e.name) then
                 e.level = level
                 e.path = fs.path_join(dir, e.name)
+
                 tree:append(e)
             end
         end
 
         tree:sort(order)
 
-        for k, v in pairs(expanded[dir] or {}) do
+        for k, v in pairs(expanded) do
             local sub = fs.path_join(dir, k)
             local pos = tree.revers[sub]
 
             if pos then
-                local subtree = scan(sub, level + 1)
+                local subtree = scan(sub, v, level + 1)
                 tree:insert(pos + 1, subtree)
             end
         end
@@ -159,36 +165,43 @@ local function scanner(expanded, filter)
     return scan
 end
 
---- get ordered directory tree
--- @param dir string: directory path
--- @param expanded table: cache of entries which should be expanded
--- @param filter function: filter function
--- @param level number: directory level
--- local function scan(dir, expanded, filter, level)
---     local tree = Tree:new()
+--- creates depp directory scanner with the names filter provided
+-- @param filter (name) => bool: directory entry name filter
+-- @return (dir, expanded, level) => Tree: directories scanner which expands
+-- all subdirectories, directory entries are sorted alphabetically but
+-- directories are in top
+local function deepscanner(filter)
+    local scan
+    scan = function(dir, expanded, level)
+        local dirs = {}
+        local tree = Tree:new()
 
---     for e in fs.scan(dir) do
---         if not filter(e.name) then
---             e.level = level
---             tree:append(e)
---         end
---     end
+        for e in fs.scan(dir) do
+            if not filter(e.name) then
+                e.level = level
+                e.path = fs.path_join(dir, e.name)
 
---     tree:sort(order)
+                if e.type == fs.FSITEM_DIR then
+                    dirs[e.path] = e.name
+                end
 
---     for k, v in pairs(expanded) do
---         local pos = tree.revers[k]
---         if pos then
---             local subdir = fs.path_join(dir, v.name)
---             local subtree = scan(subdir, expanded, filter, level + 1)
---             tree:insert(pos, subtree)
---         end
---     end
+                tree:append(e)
+            end
+        end
 
---     return tree
--- end
+        tree:sort(order)
 
---- represents plugin model
+        for k, v in pairs(dirs) do
+            expanded[v] = {}
+            local subtree = scan(k, expanded[v], level + 1)
+            tree:insert(tree.revers[k] + 1, subtree)
+        end
+
+        return tree
+    end
+    return scan
+end
+
 Model = {}
 Model.__index = Model
 
@@ -226,4 +239,5 @@ return {
     Tree = Tree,
     filter = filter,
     scanner = scanner,
+    deepscanner = deepscanner,
 }

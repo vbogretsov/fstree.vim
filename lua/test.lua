@@ -82,39 +82,6 @@ end
 test.open.start_up = start_up
 test.open.tear_down = tear_down
 
--- ************************** hashlib *****************************************
-
--- test.hashlib = function()
---     local charset = {}
---     -- qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890
---     for i = 48,  57 do table.insert(charset, string.char(i)) end
---     for i = 65,  90 do table.insert(charset, string.char(i)) end
---     for i = 97, 122 do table.insert(charset, string.char(i)) end
-
---     math.randomseed(os.time())
-
---     local function randstr(len)
---         if len > 0 then
---             return randstr(len - 1) .. charset[math.random(1, #charset)]
---         else
---             return ""
---         end
---     end
-
---     local size = 1000
---     local buckets = {}
-
---     for i = 1, size do
---         local str = randstr(10)
---         local ind = hashlib.hash(str) % size
---         buckets[ind] = (buckets[ind] or 0) + 1
---     end
-
---     for k, v in pairs(buckets) do
---         test.is_true(v < 10)
---     end
--- end
-
 -- ************************** mock ********************************************
 
 local Mock = {}
@@ -339,17 +306,13 @@ test.scanner.tear_down = tear_down
 
 test.scanner.scan = function()
     local expanded = {
-        [CWD] = {
-            ["subdir-1"] = true,
-            ["subdir-3"] = true,
+        ["subdir-1"] = {
+            ["subdir-1-1"] = {}
         },
-        [fs.path_join(CWD, "subdir-1")] = {
-            ["subdir-1-1"] = true,
-        }
+        ["subdir-3"] = {},
     }
-    local scanner = model.scanner(expanded, model.filter({"^%.$", "^%..$"}))
-
-    local tree = scanner(CWD, 0)
+    local scanner = model.scanner(model.filter({"^%.$", "^%..$"}))
+    local tree = scanner(CWD, expanded, 0)
 
     test.equal(tree.entries[1].name, "subdir-1")
     test.equal(tree.entries[1].level, 0)
@@ -377,6 +340,49 @@ test.scanner.scan = function()
     test.equal(tree.entries[12].level, 0)
     test.equal(tree.entries[13].name, "bfile-2")
     test.equal(tree.entries[13].level, 0)
+end
+
+test.deepscanner.scan = function()
+    local expanded = {}
+    local scanner = model.deepscanner(model.filter({"^%.$", "^%..$"}))
+    local tree = scanner(CWD, expanded, 0)
+
+    test.equal(tree.entries[1].name, "subdir-1")
+    test.equal(tree.entries[1].level, 0)
+    test.equal(tree.entries[2].name, "subdir-1-1")
+    test.equal(tree.entries[2].level, 1)
+    test.equal(tree.entries[3].name, "afile-1-1-1")
+    test.equal(tree.entries[3].level, 2)
+    test.equal(tree.entries[4].name, "afile-1-1-2")
+    test.equal(tree.entries[4].level, 2)
+    test.equal(tree.entries[5].name, "afile-1-1-3")
+    test.equal(tree.entries[5].level, 2)
+    test.equal(tree.entries[6].name, "subdir-1-2")
+    test.equal(tree.entries[6].level, 1)
+    test.equal(tree.entries[7].name, "afile-1-2-1")
+    test.equal(tree.entries[7].level, 2)
+    test.equal(tree.entries[8].name, "afile-1-2-2")
+    test.equal(tree.entries[8].level, 2)
+    test.equal(tree.entries[9].name, "afile-1-1")
+    test.equal(tree.entries[9].level, 1)
+    test.equal(tree.entries[10].name, "afile-1-2")
+    test.equal(tree.entries[10].level, 1)
+    test.equal(tree.entries[11].name, "subdir-2")
+    test.equal(tree.entries[11].level, 0)
+    test.equal(tree.entries[12].name, "bfile-2-3")
+    test.equal(tree.entries[12].level, 1)
+    test.equal(tree.entries[13].name, "zfile-2-1")
+    test.equal(tree.entries[13].level, 1)
+    test.equal(tree.entries[14].name, "zfile-2-2")
+    test.equal(tree.entries[14].level, 1)
+    test.equal(tree.entries[15].name, "subdir-3")
+    test.equal(tree.entries[15].level, 0)
+    test.equal(tree.entries[16].name, "subdir-3-1")
+    test.equal(tree.entries[16].level, 1)
+    test.equal(tree.entries[17].name, "afile-1")
+    test.equal(tree.entries[17].level, 0)
+    test.equal(tree.entries[18].name, "bfile-2")
+    test.equal(tree.entries[18].level, 0)
 end
 
 test.open = function()
