@@ -1,6 +1,12 @@
+local string = require("string")
 local fs = require("fs")
 local tree = require("tree")
 
+
+local _CREAT = {
+    [fs.TYPE.DIR] = fs.mkdir,
+    [fs.TYPE.REG] = fs.creat,
+}
 
 local _M = {}
 
@@ -176,21 +182,27 @@ function Plug:back()
     self:_opendir(fs.join(self.cwd, ".."))
 end
 
-function Plug:creat(line, name)
+function Plug:creat(line, name, tp)
+    local func = _CREAT[tp]
+    if not func then
+        error(string.format("unkown fs.TYPE %d", tp))
+    end
+
     local e = self.tree.entries[line]
     if e then
-        local p = self.tree:parent(e)
-        local path = fs.join(p and p.path or self.cwd, name)
+        local p = self.tree:parent(e) or { path = self.cwd, level = -1 }
+        local path = fs.join(p.path, name)
 
-        fs.creat(path)
+        func(path)
+
         local c = {
+            [type] = tp,
             name = name,
             path = path,
-            level = p and p.level + 1 or 0,
+            level = p.level + 1,
         }
 
-        local k = self.tree:push(p, c, self.order)
-        print("K =", k)
+        local k = self.tree:push(p, c, self.cfg.order)
         self.view:insert(k, {self.format(c)})
     end
 end

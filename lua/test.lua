@@ -461,7 +461,7 @@ test.plug.creat = function()
 
     p:expand(2)
 
-    p:creat(3, "afile-9-9")
+    p:creat(3, "afile-9-9", fs.TYPE.REG)
     test.equal(v, View.new(CWD, {
         "+ subdir-1",
         "- subdir-2",
@@ -469,9 +469,53 @@ test.plug.creat = function()
         "    bfile-2-3",
         "    zfile-2-1",
         "    zfile-2-2",
-        "- subdir-3",
-        "  + subdir-3-1",
+        "+ subdir-3",
         "  afile-1",
+        "  bfile-2",
+    }))
+
+    p:creat(1, "afile-9-9", fs.TYPE.REG)
+    test.equal(v, View.new(CWD, {
+        "+ subdir-1",
+        "- subdir-2",
+        "    afile-9-9",
+        "    bfile-2-3",
+        "    zfile-2-1",
+        "    zfile-2-2",
+        "+ subdir-3",
+        "  afile-1",
+        "  afile-9-9",
+        "  bfile-2",
+    }))
+
+    p:creat(10, "afile-8-8", fs.TYPE.REG)
+    test.equal(v, View.new(CWD, {
+        "+ subdir-1",
+        "- subdir-2",
+        "    afile-9-9",
+        "    bfile-2-3",
+        "    zfile-2-1",
+        "    zfile-2-2",
+        "+ subdir-3",
+        "  afile-1",
+        "  afile-8-8",
+        "  afile-9-9",
+        "  bfile-2",
+    }))
+
+    p:creat(2, "subdir-2-4", fs.TYPE.DIR)
+    test.equal(v, View.new(CWD, {
+        "+ subdir-1",
+        "- subdir-2",
+        "    afile-9-9",
+        "    bfile-2-3",
+        "    zfile-2-1",
+        "    zfile-2-2",
+        "+ subdir-2-4",
+        "+ subdir-3",
+        "  afile-1",
+        "  afile-8-8",
+        "  afile-9-9",
         "  bfile-2",
     }))
 end

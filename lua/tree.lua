@@ -69,23 +69,19 @@ end
 
 function Tree:push(parent, item, order)
     local k = -1
-
-    local n = self.revers[parent.path]
-    if not n then
-        return k
-    end
+    local n = self.revers[parent] or 0
 
     for i = n + 1, #self.entries do
         local e = self.entries[i]
-        if e.level >= parent.level then
-            break
-        end
-        if order(item, e) then
+        if e.level == item.level and order(item, e) then
             k = i
             table.insert(self.entries, k, item)
+            self.revers[item.path] = k
             break
         end
     end
+
+    print( "K=", k )
 
     return k
 end
